@@ -801,8 +801,13 @@ static void hdd_copy_vht_operation(hdd_station_ctx_t *hdd_sta_ctx,
     vos_mem_zero(hdd_vht_ops, sizeof(struct ieee80211_vht_operation));
 
     hdd_vht_ops->chan_width = roam_vht_ops->chanWidth;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+    hdd_vht_ops->center_freq_seg0_idx = roam_vht_ops->chanCenterFreqSeg1;
+    hdd_vht_ops->center_freq_seg1_idx = roam_vht_ops->chanCenterFreqSeg2;
+#else
     hdd_vht_ops->center_freq_seg1_idx = roam_vht_ops->chanCenterFreqSeg1;
     hdd_vht_ops->center_freq_seg2_idx = roam_vht_ops->chanCenterFreqSeg2;
+#endif
     hdd_vht_ops->basic_mcs_set = roam_vht_ops->basicMCSSet;
 }
 
@@ -4960,7 +4965,7 @@ int hdd_set_csr_auth_type ( hdd_adapter_t  *pAdapter, eCsrAuthType RSNAuthType)
                 hddLog( LOG1, "%s: set authType to CCKM WPA. AKM also 802.1X.", __func__);
                 pRoamProfile->AuthType.authType[0] = eCSR_AUTH_TYPE_CCKM_WPA;
             } else
-            if (RSNAuthType == eCSR_AUTH_TYPE_CCKM_WPA) {
+            if ((RSNAuthType == eCSR_AUTH_TYPE_CCKM_WPA)) {
                 hddLog( LOG1, "%s: Last chance to set authType to CCKM WPA.", __func__);
                 pRoamProfile->AuthType.authType[0] = eCSR_AUTH_TYPE_CCKM_WPA;
             } else
@@ -4984,7 +4989,7 @@ int hdd_set_csr_auth_type ( hdd_adapter_t  *pAdapter, eCsrAuthType RSNAuthType)
                 hddLog( LOG1, "%s: set authType to CCKM RSN. AKM also 802.1X.", __func__);
                 pRoamProfile->AuthType.authType[0] = eCSR_AUTH_TYPE_CCKM_RSN;
             } else
-            if (RSNAuthType == eCSR_AUTH_TYPE_CCKM_RSN) {
+            if ((RSNAuthType == eCSR_AUTH_TYPE_CCKM_RSN)) {
                 hddLog( LOG1, "%s: Last chance to set authType to CCKM RSN.", __func__);
                 pRoamProfile->AuthType.authType[0] = eCSR_AUTH_TYPE_CCKM_RSN;
             } else

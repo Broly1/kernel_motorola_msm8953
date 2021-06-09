@@ -50,7 +50,6 @@
 	};
 };
 
-
 &soc {
 	alsa_to_h2w {
 		status = "disabled";

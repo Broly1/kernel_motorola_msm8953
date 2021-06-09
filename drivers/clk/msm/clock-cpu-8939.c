@@ -68,7 +68,6 @@ static struct mux_div_clk a53ssmux_bc = {
 	},
 	.c = {
 		.dbg_name = "a53ssmux_bc",
-		.flags = CLKFLAG_NO_RATE_CACHE,
 		.ops = &clk_ops_mux_div_clk,
 		CLK_INIT(a53ssmux_bc.c),
 	},
@@ -88,7 +87,6 @@ static struct mux_div_clk a53ssmux_lc = {
 	},
 	.c = {
 		.dbg_name = "a53ssmux_lc",
-		.flags = CLKFLAG_NO_RATE_CACHE,
 		.ops = &clk_ops_mux_div_clk,
 		CLK_INIT(a53ssmux_lc.c),
 	},
@@ -579,9 +577,9 @@ static void print_opp_table(int a53_c0_cpu, int a53_c1_cpu, bool single_cluster)
 static void populate_opp_table(struct platform_device *pdev,
 					bool single_cluster)
 {
-	struct platform_device *apc0_dev = NULL, *apc1_dev;
+	struct platform_device *apc0_dev, *apc1_dev;
 	struct device_node *apc0_node = NULL, *apc1_node;
-	unsigned long apc0_fmax = 0, apc1_fmax;
+	unsigned long apc0_fmax, apc1_fmax;
 	int cpu, a53_c0_cpu = 0, a53_c1_cpu = 0;
 
 	if (!single_cluster)

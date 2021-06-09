@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -404,7 +404,7 @@
 			"INFO:%s: " fmt, __func__, arg); \
 	if ((dev) && (dev)->ipc_log)   \
 		ipc_log_string((dev)->ipc_log, "%s: " fmt, __func__, arg); \
-	pr_debug("%s: " fmt, __func__, arg);  \
+	pr_info("%s: " fmt, __func__, arg);  \
 	} while (0)
 
 #define PCIE_ERR(dev, fmt, arg...) do {			 \
@@ -2040,6 +2040,7 @@ static void msm_pcie_sel_debug_testcase(struct msm_pcie_dev_t *dev,
 	u32 current_offset = 0;
 	u32 ep_link_ctrlstts_offset = 0;
 	u32 ep_dev_ctrl2stts2_offset = 0;
+	u32 wr_ofst = 0;
 
 	if (testcase >= 5 && testcase <= 10) {
 		current_offset =
@@ -2229,22 +2230,24 @@ static void msm_pcie_sel_debug_testcase(struct msm_pcie_dev_t *dev,
 			break;
 		}
 
+		wr_ofst = wr_offset;
+
 		PCIE_DBG_FS(dev,
 			"base: %s: 0x%p\nwr_offset: 0x%x\nwr_mask: 0x%x\nwr_value: 0x%x\n",
 			dev->res[base_sel - 1].name,
 			dev->res[base_sel - 1].base,
-			wr_offset, wr_mask, wr_value);
+			wr_ofst, wr_mask, wr_value);
 
 		base_sel_size = resource_size(dev->res[base_sel - 1].resource);
 
-		if (wr_offset >  base_sel_size - 4 ||
-			msm_pcie_check_align(dev, wr_offset))
+		if (wr_ofst >  base_sel_size - 4 ||
+			msm_pcie_check_align(dev, wr_ofst))
 			PCIE_DBG_FS(dev,
 				"PCIe: RC%d: Invalid wr_offset: 0x%x. wr_offset should be no more than 0x%x\n",
-				dev->rc_idx, wr_offset, base_sel_size - 4);
+				dev->rc_idx, wr_ofst, base_sel_size - 4);
 		else
 			msm_pcie_write_reg_field(dev->res[base_sel - 1].base,
-				wr_offset, wr_mask, wr_value);
+				wr_ofst, wr_mask, wr_value);
 
 		break;
 	case 13: /* dump all registers of base_sel */
@@ -2304,8 +2307,6 @@ int msm_pcie_debug_info(struct pci_dev *dev, u32 option, u32 base,
 		return -ENODEV;
 	}
 
-	pdev = PCIE_BUS_PRIV_DATA(dev->bus);
-
 	if (option == 12 || option == 13) {
 		if (!base || base > 5) {
 			PCIE_DBG_FS(pdev, "Invalid base_sel: 0x%x\n", base);
@@ -2332,6 +2333,7 @@ int msm_pcie_debug_info(struct pci_dev *dev, u32 option, u32 base,
 		}
 	}
 
+	pdev = PCIE_BUS_PRIV_DATA(dev->bus);
 	rc_sel = 1 << pdev->rc_idx;
 
 	msm_pcie_sel_debug_testcase(pdev, option);

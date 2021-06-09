@@ -1180,4 +1180,3 @@ TRACE_EVENT(f2fs_destroy_extent_tree,
 
  /* This part must be outside protection */
 #include <trace/define_trace.h>
-

@@ -96,38 +96,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
-static atomic_t __su_instances;
-
-int su_instances(void)
-{
-	return atomic_read(&__su_instances);
-}
-
-bool su_running(void)
-{
-	return su_instances() > 0;
-}
-
-bool su_visible(void)
-{
-	kuid_t uid = current_uid();
-	if (su_running())
-		return true;
-	if (uid_eq(uid, GLOBAL_ROOT_UID) || uid_eq(uid, GLOBAL_SYSTEM_UID))
-		return true;
-	return false;
-}
-
-void su_exec(void)
-{
-	atomic_inc(&__su_instances);
-}
-
-void su_exit(void)
-{
-	atomic_dec(&__su_instances);
-}
-
 const char *task_event_names[] = {"PUT_PREV_TASK", "PICK_NEXT_TASK",
 				  "TASK_WAKE", "TASK_MIGRATE", "TASK_UPDATE",
 				"IRQ_UPDATE"};
@@ -2012,7 +1980,7 @@ static int send_notification(struct rq *rq, int check_pred, int check_groups)
 	unsigned int cur_freq, freq_required;
 	unsigned long flags;
 	int rc = 0;
-	u64 group_load = 0, new_load = 0;
+	u64 group_load = 0, new_load;
 
 	if (!sched_enable_hmp)
 		return 0;
@@ -3794,12 +3762,12 @@ static void transfer_busy_time(struct rq *rq, struct related_thread_group *grp,
 {
 	u64 wallclock;
 	struct group_cpu_time *cpu_time;
-	u64 *src_curr_runnable_sum = 0, *dst_curr_runnable_sum = 0;
-	u64 *src_prev_runnable_sum = 0, *dst_prev_runnable_sum = 0;
-	u64 *src_nt_curr_runnable_sum = 0, *dst_nt_curr_runnable_sum = 0;
-	u64 *src_nt_prev_runnable_sum = 0, *dst_nt_prev_runnable_sum = 0;
+	u64 *src_curr_runnable_sum, *dst_curr_runnable_sum;
+	u64 *src_prev_runnable_sum, *dst_prev_runnable_sum;
+	u64 *src_nt_curr_runnable_sum, *dst_nt_curr_runnable_sum;
+	u64 *src_nt_prev_runnable_sum, *dst_nt_prev_runnable_sum;
 	struct migration_sum_data d;
-	int migrate_type = 0;
+	int migrate_type;
 
 	if (!sched_freq_aggregate)
 		return;
@@ -4412,7 +4380,7 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 		if (p->sched_class->migrate_task_rq)
 			p->sched_class->migrate_task_rq(p, new_cpu);
 		p->se.nr_migrations++;
-		perf_sw_event_sched(PERF_COUNT_SW_CPU_MIGRATIONS, 1, 0);
+		perf_sw_event(PERF_COUNT_SW_CPU_MIGRATIONS, 1, NULL, 0);
 
 		fixup_busy_time(p, new_cpu);
 	}
@@ -5086,28 +5054,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 */
 	smp_rmb();
 
-	/*
-	 * Ensure we load p->on_rq _after_ p->state, otherwise it would
-	 * be possible to, falsely, observe p->on_rq == 0 and get stuck
-	 * in smp_cond_load_acquire() below.
-	 *
-	 * sched_ttwu_pending()                 try_to_wake_up()
-	 *   [S] p->on_rq = 1;                  [L] P->state
-	 *       UNLOCK rq->lock  -----.
-	 *                              \
-	 *				 +---   RMB
-	 * schedule()                   /
-	 *       LOCK rq->lock    -----'
-	 *       UNLOCK rq->lock
-	 *
-	 * [task p]
-	 *   [S] p->state = UNINTERRUPTIBLE     [L] p->on_rq
-	 *
-	 * Pairs with the UNLOCK+LOCK on rq->lock from the
-	 * last wakeup of our task and the schedule that got our task
-	 * current.
-	 */
-	smp_rmb();
 	if (p->on_rq && ttwu_remote(p, wake_flags))
 		goto stat;
 
@@ -5343,10 +5289,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 
 #ifdef CONFIG_SCHEDSTATS
 	memset(&p->se.statistics, 0, sizeof(p->se.statistics));
-#endif
-
-#ifdef CONFIG_CPU_FREQ_STAT
-	cpufreq_task_stats_init(p);
 #endif
 
 	RB_CLEAR_NODE(&p->dl.rb_node);
@@ -8009,23 +7951,34 @@ EXPORT_SYMBOL_GPL(yield_to);
  * This task is about to go to sleep on IO. Increment rq->nr_iowait so
  * that process accounting knows that this is a task in IO wait state.
  */
-long __sched io_schedule_timeout(long timeout)
+void __sched io_schedule(void)
 {
-	int old_iowait = current->in_iowait;
-	struct rq *rq;
-	long ret;
-
-	current->in_iowait = 1;
-	blk_schedule_flush_plug(current);
+	struct rq *rq = raw_rq();
 
 	delayacct_blkio_start();
-	rq = raw_rq();
 	atomic_inc(&rq->nr_iowait);
-	ret = schedule_timeout(timeout);
-	current->in_iowait = old_iowait;
+	blk_flush_plug(current);
+	current->in_iowait = 1;
+	schedule();
+	current->in_iowait = 0;
 	atomic_dec(&rq->nr_iowait);
 	delayacct_blkio_end();
+}
+EXPORT_SYMBOL(io_schedule);
 
+long __sched io_schedule_timeout(long timeout)
+{
+	struct rq *rq = raw_rq();
+	long ret;
+
+	delayacct_blkio_start();
+	atomic_inc(&rq->nr_iowait);
+	blk_flush_plug(current);
+	current->in_iowait = 1;
+	ret = schedule_timeout(timeout);
+	current->in_iowait = 0;
+	atomic_dec(&rq->nr_iowait);
+	delayacct_blkio_end();
 	return ret;
 }
 EXPORT_SYMBOL(io_schedule_timeout);
@@ -9460,9 +9413,6 @@ enum s_alloc {
  * Build an iteration mask that can exclude certain CPUs from the upwards
  * domain traversal.
  *
- * Only CPUs that can arrive at this group should be considered to continue
- * balancing.
- *
  * Asymmetric node setups can result in situations where the domain tree is of
  * unequal depth, make sure to skip domains that already cover the entire
  * range.
@@ -9474,31 +9424,18 @@ enum s_alloc {
  */
 static void build_group_mask(struct sched_domain *sd, struct sched_group *sg)
 {
-	const struct cpumask *sg_span = sched_group_cpus(sg);
+	const struct cpumask *span = sched_domain_span(sd);
 	struct sd_data *sdd = sd->private;
 	struct sched_domain *sibling;
 	int i;
 
-	for_each_cpu(i, sg_span) {
+	for_each_cpu(i, span) {
 		sibling = *per_cpu_ptr(sdd->sd, i);
-
-		/*
-		 * Can happen in the asymmetric case, where these siblings are
-		 * unused. The mask will not be empty because those CPUs that
-		 * do have the top domain _should_ span the domain.
-		 */
-		if (!sibling->child)
-			continue;
-
-		/* If we would not end up here, we can't continue from here */
-		if (!cpumask_equal(sg_span, sched_domain_span(sibling->child)))
+		if (!cpumask_test_cpu(i, sched_domain_span(sibling)))
 			continue;
 
 		cpumask_set_cpu(i, sched_group_mask(sg));
 	}
-
-	/* We must not have empty masks here */
-	WARN_ON_ONCE(cpumask_empty(sched_group_mask(sg)));
 }
 
 /*

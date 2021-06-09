@@ -974,7 +974,8 @@ static void iface_stat_create(struct net_device *net_dev,
 		for (ifa = in_dev->ifa_list; ifa; ifa = ifa->ifa_next) {
 			IF_DEBUG("qtaguid: iface_stat: create(%s): "
 				 "ifa=%p ifa_label=%s\n",
-				 ifname, ifa, ifa->ifa_label);
+				 ifname, ifa,
+				 ifa->ifa_label);
 			if (!strcmp(ifname, ifa->ifa_label))
 				break;
 		}

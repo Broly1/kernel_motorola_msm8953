@@ -72,6 +72,8 @@ obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
 obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_APDS9930)		+= apds993x.o
+obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
+obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_HAPTIC_DRV2605)	+= drv2605.o
 obj-$(CONFIG_HAPTIC_DRV2624)	+= drv2624.o
 obj-$(CONFIG_C55_CTRL) += c55_ctrl.o
@@ -89,12 +91,7 @@ obj-$(CONFIG_MODS_USB_EXT_BRIDGE) += usb_ext_bridge.o
 obj-$(CONFIG_HD3SS460_MUX) += hd3ss460_mux.o
 obj-$(CONFIG_USB3813) += usb3813_hub.o
 obj-$(CONFIG_MODS_MODBUS_EXT) += modbus_ext.o
-obj-$(CONFIG_MOTOMODS) += motomods/
 obj-$(CONFIG_FSUSB42_MUX) += fsusb42_mux.o
 obj-$(CONFIG_SENSORS_STML0XX) += stml0xx/
 obj-$(CONFIG_TPS61280) += tps61280.o
-obj-$(CONFIG_DTV_FC8300) += moto-dtv-fc8300/
-
-# TODO: remove me b/62057517
-subdir-ccflags-y += \
-	-Wno-ignored-attributes
+obj-$(CONFIG_MOTOMODS) += motomods/

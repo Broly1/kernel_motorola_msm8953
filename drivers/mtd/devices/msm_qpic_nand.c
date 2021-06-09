@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,14 +18,6 @@
 
 #define QPIC_BAM_DEFAULT_IPC_LOGLVL 2
 #define SW_REQ_TIMEOUT_SEC 10
-
-/* The driver supports devices upto 4K page */
-#define MAX_CW_PER_PAGE 8
-/*
- * Max descriptors needed for erase, read, write operations.
- * Usually, this is (2 * MAX_CW_PER_PAGE).
- */
-#define MAX_DESC 16
 
 static bool enable_euclean;
 static bool enable_perfstats;
@@ -624,7 +616,6 @@ out:
  * indicates failure. When successful, the Flash ID is stored in parameter
  * read_id.
  */
-#define READID_CMDS 5
 static int msm_nand_flash_read_id(struct msm_nand_info *info,
 		bool read_onfi_signature, uint32_t *read_id,
 		uint32_t *read_id2)
@@ -634,6 +625,7 @@ static int msm_nand_flash_read_id(struct msm_nand_info *info,
 	struct sps_iovec *iovec;
 	struct sps_iovec iovec_temp;
 	struct msm_nand_chip *chip = &info->nand_chip;
+	uint32_t total_cnt = 5;
 	/*
 	 * The following 5 commands are required to read id -
 	 * write commands - addr0, flash, exec
@@ -641,9 +633,9 @@ static int msm_nand_flash_read_id(struct msm_nand_info *info,
 	 */
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[READID_CMDS];
-		struct msm_nand_sps_cmd cmd[READID_CMDS];
-		uint32_t data[READID_CMDS];
+		struct sps_iovec cmd_iovec[total_cnt];
+		struct msm_nand_sps_cmd cmd[total_cnt];
+		uint32_t data[total_cnt];
 	} *dma_buffer;
 
 	wait_event(chip->dma_wait_queue, (dma_buffer = msm_nand_get_dma_buffer
@@ -857,7 +849,6 @@ out:
  * complaint to ONFI spec or not. If yes, then it reads the ONFI parameter
  * page to get the device parameters.
  */
-#define ONFI_CMDS 9
 static int msm_nand_flash_onfi_probe(struct msm_nand_info *info)
 {
 	struct msm_nand_chip *chip = &info->nand_chip;
@@ -878,6 +869,8 @@ static int msm_nand_flash_onfi_probe(struct msm_nand_info *info)
 	struct msm_nand_flash_onfi_data data;
 	uint32_t onfi_signature = 0;
 
+	/* SPS command/data descriptors */
+	uint32_t total_cnt = 9;
 	/*
 	 * The following 9 commands are required to get onfi parameters -
 	 * flash, addr0, addr1, cfg0, cfg1, dev0_ecc_cfg,
@@ -885,8 +878,8 @@ static int msm_nand_flash_onfi_probe(struct msm_nand_info *info)
 	 */
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[ONFI_CMDS];
-		struct msm_nand_sps_cmd cmd[ONFI_CMDS];
+		struct sps_iovec cmd_iovec[total_cnt];
+		struct msm_nand_sps_cmd cmd[total_cnt];
 		uint32_t flash_status;
 	} *dma_buffer;
 
@@ -1589,21 +1582,22 @@ static int msm_nand_is_erased_page(struct mtd_info *mtd, loff_t from,
 	 * be sent for every CW - flash, read_location_0, read_location_1,
 	 * exec, flash_status and buffer_status.
 	 */
+	uint32_t desc_needed = 2 * cwperpage;
 	struct msm_nand_rw_cmd_desc *cmd_list = NULL;
 	uint32_t cw_desc_cnt = 0;
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[MAX_DESC];
+		struct sps_iovec cmd_iovec[desc_needed];
 		struct {
 			uint32_t count;
 			struct msm_nand_cmd_setup_desc setup_desc;
-			struct msm_nand_cmd_cw_desc cw_desc[MAX_DESC - 1];
+			struct msm_nand_cmd_cw_desc cw_desc[desc_needed - 1];
 		} cmd_list;
 		struct {
 			uint32_t flash_status;
 			uint32_t buffer_status;
 			uint32_t erased_cw_status;
-		} result[MAX_CW_PER_PAGE];
+		} result[cwperpage];
 	} *dma_buffer;
 	uint8_t *ecc;
 
@@ -1812,19 +1806,20 @@ static int msm_nand_read_oob(struct mtd_info *mtd, loff_t from,
 	 * be sent for every CW - flash, read_location_0, read_location_1,
 	 * exec, flash_status and buffer_status.
 	 */
+	uint32_t desc_needed = 2 * cwperpage;
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[MAX_DESC];
+		struct sps_iovec cmd_iovec[desc_needed];
 		struct {
 			uint32_t count;
 			struct msm_nand_cmd_setup_desc setup_desc;
-			struct msm_nand_cmd_cw_desc cw_desc[MAX_DESC - 1];
+			struct msm_nand_cmd_cw_desc cw_desc[desc_needed - 1];
 		} cmd_list;
 		struct {
 			uint32_t flash_status;
 			uint32_t buffer_status;
 			uint32_t erased_cw_status;
-		} result[MAX_CW_PER_PAGE];
+		} result[cwperpage];
 	} *dma_buffer;
 	struct msm_nand_rw_cmd_desc *cmd_list = NULL;
 
@@ -2374,17 +2369,18 @@ static int msm_nand_write_oob(struct mtd_info *mtd, loff_t to,
 	 * The following 4 commands will be sent for every CW :
 	 * flash, exec, flash_status (read), flash_status (write).
 	 */
+	uint32_t desc_needed = 2 * cwperpage;
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[MAX_DESC + 1];
+		struct sps_iovec cmd_iovec[desc_needed + 1];
 		struct {
 			uint32_t count;
 			struct msm_nand_cmd_setup_desc setup_desc;
-			struct msm_nand_cmd_cw_desc cw_desc[MAX_DESC];
+			struct msm_nand_cmd_cw_desc cw_desc[desc_needed];
 		} cmd_list;
 		struct {
 			uint32_t flash_status;
-		} data[MAX_CW_PER_PAGE];
+		} data[cwperpage];
 	} *dma_buffer;
 	struct msm_nand_rw_cmd_desc *cmd_list = NULL;
 
@@ -2657,7 +2653,6 @@ struct msm_nand_erase_reg_data {
  * Function that gets called from upper layers such as MTD/YAFFS2 to erase a
  * block within NAND device.
  */
-#define ERASE_CMDS 9
 static int msm_nand_erase(struct mtd_info *mtd, struct erase_info *instr)
 {
 	int i = 0, err = 0;
@@ -2668,6 +2663,7 @@ static int msm_nand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	struct msm_nand_erase_reg_data data;
 	struct sps_iovec *iovec;
 	struct sps_iovec iovec_temp;
+	uint32_t total_cnt = 9;
 	ktime_t start;
 
 	/*
@@ -2677,8 +2673,8 @@ static int msm_nand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	 */
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[ERASE_CMDS];
-		struct msm_nand_sps_cmd cmd[ERASE_CMDS];
+		struct sps_iovec cmd_iovec[total_cnt];
+		struct msm_nand_sps_cmd cmd[total_cnt];
 		uint32_t flash_status;
 	} *dma_buffer;
 
@@ -2823,7 +2819,6 @@ struct msm_nand_blk_isbad_data {
  * checking whether the bad block byte location contains 0xFF or not. If it
  * doesn't contain 0xFF, then it is considered as bad block.
  */
-#define ISBAD_CMDS 9
 static int msm_nand_block_isbad(struct mtd_info *mtd, loff_t ofs)
 {
 	struct msm_nand_info *info = mtd->priv;
@@ -2835,6 +2830,7 @@ static int msm_nand_block_isbad(struct mtd_info *mtd, loff_t ofs)
 	struct msm_nand_blk_isbad_data data;
 	struct sps_iovec *iovec;
 	struct sps_iovec iovec_temp;
+	uint32_t total_cnt = 9;
 	/*
 	 * The following 9 commands are required to check bad block -
 	 * flash, addr0, addr1, cfg0, cfg1, ecc_cfg, read_loc_0,
@@ -2842,8 +2838,8 @@ static int msm_nand_block_isbad(struct mtd_info *mtd, loff_t ofs)
 	 */
 	struct {
 		struct sps_transfer xfer;
-		struct sps_iovec cmd_iovec[ISBAD_CMDS];
-		struct msm_nand_sps_cmd cmd[ISBAD_CMDS];
+		struct sps_iovec cmd_iovec[total_cnt];
+		struct msm_nand_sps_cmd cmd[total_cnt];
 		uint32_t flash_status;
 	} *dma_buffer;
 
@@ -3080,7 +3076,7 @@ int msm_nand_scan(struct mtd_info *mtd)
 		for (i = 0; !flashman && nand_manuf_ids[i].id; ++i)
 			if (nand_manuf_ids[i].id == manid)
 				flashman = &nand_manuf_ids[i];
-		for (i = 0; !flashdev && (nand_flash_ids[i].id != NULL); ++i) {
+		for (i = 0; !flashdev && nand_flash_ids[i].id; ++i) {
 			/*
 			 * If id_len is specified for an entry in the nand ids
 			 * array, then at least 4 bytes of the nand id is
@@ -3555,7 +3551,7 @@ static int msm_nand_parse_smem_ptable(int *nr_parts)
 
 	for (i = 0; i < ptable.numparts; i++) {
 		pentry = &ptable.part_entry[i];
-		if (pentry->name == NULL)
+		if (pentry->name == '\0')
 			continue;
 		/* Convert name to lower case and discard the initial chars */
 		mtd_part[i].name        = pentry->name;

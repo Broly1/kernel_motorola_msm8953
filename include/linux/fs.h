@@ -839,7 +839,7 @@ struct file {
 #ifdef CONFIG_FILE_TABLE_DEBUG
 	struct hlist_node f_hash;
 #endif /* #ifdef CONFIG_FILE_TABLE_DEBUG */
-} __attribute__((aligned(4)));	/* lest something weird decides that 2 is OK */
+} __attribute__((aligned(8)));
 
 struct file_handle {
 	__u32 handle_bytes;
@@ -861,9 +861,9 @@ static inline struct file *get_file(struct file *f)
 /* Page cache limit. The filesystems should put that into their s_maxbytes 
    limits, otherwise bad things can happen in VM. */ 
 #if BITS_PER_LONG==32
-#define MAX_LFS_FILESIZE	(((loff_t)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
+#define MAX_LFS_FILESIZE	((loff_t)ULONG_MAX << PAGE_SHIFT)
 #elif BITS_PER_LONG==64
-#define MAX_LFS_FILESIZE 	((loff_t)0x7fffffffffffffffLL)
+#define MAX_LFS_FILESIZE 	((loff_t)LLONG_MAX)
 #endif
 
 #define FL_POSIX	1
@@ -1504,7 +1504,6 @@ typedef int (*filldir_t)(void *, const char *, int, loff_t, u64, unsigned);
 struct dir_context {
 	const filldir_t actor;
 	loff_t pos;
-	bool romnt;
 };
 
 struct block_device_operations;
